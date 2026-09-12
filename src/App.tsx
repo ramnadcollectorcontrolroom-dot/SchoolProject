@@ -7,7 +7,6 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
-  Filter,
   GraduationCap,
   Home,
   LogOut,
@@ -36,6 +35,7 @@ import {
 import * as XLSX from 'xlsx'
 import './App.css'
 import { sampleSchools, type SchoolRecord } from './data/sampleSchools'
+import SchoolMap from './components/SchoolMap'
 import type { ExcelImportSummary, LoginFormState, ValidationIssue, ViewName } from './types/app'
 import { calculateFacilityAvailability, calculateStudentTeacherRatio, moneyFormat } from './utils/schoolUtils'
 
@@ -45,6 +45,7 @@ const DEFAULT_PAGE: ViewName = 'dashboard'
 
 const demoUsername = import.meta.env.VITE_DEMO_USERNAME || 'admin'
 const demoPassword = import.meta.env.VITE_DEMO_PASSWORD || 'admin123'
+const approvedPortraitUrl = import.meta.env.VITE_APPROVED_CM_IMAGE || ''
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -111,6 +112,8 @@ function App() {
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({})
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([])
   const [importFeedback, setImportFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
+  const [villageViewTaluk, setVillageViewTaluk] = useState('All')
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(schools))
@@ -180,7 +183,6 @@ function App() {
     { label: 'Boys', value: moneyFormat(schoolStats.boys), color: '#1d4ed8', icon: User },
     { label: 'Girls', value: moneyFormat(schoolStats.girls), color: '#ec4899', icon: User },
     { label: 'Total Teachers', value: moneyFormat(schoolStats.totalTeachers), color: '#16a34a', icon: Users },
-    { label: 'Student-Teacher Ratio', value: schoolStats.studentTeacherRatio.toFixed(2), color: '#7c3aed', icon: Filter },
   ]
 
   const schoolsByTaluk = useMemo(() => {
@@ -370,6 +372,10 @@ function App() {
           taluk,
           block,
           village,
+          latitude: parseOptionalNumber(row[fieldMappings.latitude ?? 'latitude']),
+          longitude: parseOptionalNumber(row[fieldMappings.longitude ?? 'longitude']),
+          phone: String(row[fieldMappings.phone ?? 'phone'] ?? '').trim(),
+          email: String(row[fieldMappings.email ?? 'email'] ?? '').trim(),
           totalStudents,
           totalTeachers,
           lastUpdated: new Date().toISOString().slice(0, 10),
@@ -391,6 +397,10 @@ function App() {
         headmaster: String(row[fieldMappings.headmaster ?? 'headmaster'] ?? 'Data Not Available'),
         address: String(row[fieldMappings.address ?? 'address'] ?? 'Data Not Available'),
         pinCode: String(row[fieldMappings.pinCode ?? 'pinCode'] ?? 'Data Not Available'),
+        latitude: parseOptionalNumber(row[fieldMappings.latitude ?? 'latitude']),
+        longitude: parseOptionalNumber(row[fieldMappings.longitude ?? 'longitude']),
+        phone: String(row[fieldMappings.phone ?? 'phone'] ?? '').trim(),
+        email: String(row[fieldMappings.email ?? 'email'] ?? '').trim(),
         totalStudents: Number.isFinite(totalStudents) ? totalStudents : 0,
         boys: Number(row[fieldMappings.boys ?? 'boys'] ?? 0),
         girls: Number(row[fieldMappings.girls ?? 'girls'] ?? 0),
@@ -457,30 +467,89 @@ function App() {
     setActiveView(DEFAULT_PAGE)
   }
 
+  const updateSelectedSchool = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    if (!selectedSchool) return
+    const updatedSchool: SchoolRecord = {
+      ...selectedSchool,
+      schoolName: String(formData.get('schoolName') ?? '').trim(),
+      headmaster: String(formData.get('headmaster') ?? '').trim(),
+      phone: String(formData.get('phone') ?? '').trim(),
+      email: String(formData.get('email') ?? '').trim(),
+      address: String(formData.get('address') ?? '').trim(),
+      latitude: parseOptionalNumber(formData.get('latitude')),
+      longitude: parseOptionalNumber(formData.get('longitude')),
+      lastUpdated: new Date().toISOString().slice(0, 10),
+    }
+    setSchools((current) => current.map((school) => school.id === updatedSchool.id ? updatedSchool : school))
+    setIsEditingProfile(false)
+  }
+
+  const exportSchools = (records: SchoolRecord[], filename: string) => {
+    const rows = records.map((school) => ({
+      School: school.schoolName,
+      UDISE: school.udiseCode,
+      Management: school.management,
+      Type: school.schoolType,
+      Taluk: school.taluk,
+      Block: school.block,
+      Village: school.village,
+      Students: school.totalStudents,
+      Teachers: school.totalTeachers,
+      Latitude: school.latitude ?? '',
+      Longitude: school.longitude ?? '',
+    }))
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Schools')
+    XLSX.writeFile(workbook, filename)
+  }
+
   if (!isLoggedIn) {
     return (
       <div className="login-page-shell">
         <div className="login-panel">
           <div className="login-branding">
-            <div className="brand-mark">TN</div>
-            <p className="eyebrow">Government of Tamil Nadu</p>
-            <h1>Ramanathapuram District</h1>
-            <h2>School Information Portal</h2>
-            <p className="tagline">Digital School Information &amp; Monitoring System</p>
-            <div className="info-card">
-              <ShieldCheck size={18} />
-              <span>Secure district education monitoring dashboard</span>
+            <div className="branding-topline">
+              <div className="brand-mark">TN</div>
+              <div>
+                <p className="eyebrow">Government of Tamil Nadu</p>
+                <span className="portal-label">District School Education</span>
+              </div>
             </div>
-            <div className="info-card">
-              <Database size={18} />
-              <span>Data-driven school infrastructure monitoring</span>
+
+            <div className="branding-copy">
+              <p className="branding-kicker">Official monitoring portal</p>
+              <h1>Ramanathapuram District</h1>
+              <h2>School Information Portal</h2>
+              <p className="tagline">Digital School Information &amp; Monitoring System</p>
+              <p className="branding-description">A unified view of school records, student strength, infrastructure and location data for district-level review.</p>
+            </div>
+
+            <div className="branding-portrait" aria-label={approvedPortraitUrl ? 'Approved government portrait' : 'Approved government portrait placeholder'}>
+              {approvedPortraitUrl ? (
+                <img src={approvedPortraitUrl} alt="Approved government portrait" />
+              ) : (
+                <div className="portrait-placeholder">
+                  <ShieldCheck size={24} />
+                  <strong>Approved portrait asset</strong>
+                  <span>Configure VITE_APPROVED_CM_IMAGE to display the supplied image.</span>
+                </div>
+              )}
+            </div>
+
+            <div className="feature-list">
+              <div className="feature-item"><Database size={17} /><span>School Data Management</span></div>
+              <div className="feature-item"><ShieldCheck size={17} /><span>District-level Monitoring</span></div>
+              <div className="feature-item"><MapPinned size={17} /><span>Location &amp; Infrastructure Monitoring</span></div>
             </div>
           </div>
 
           <div className="login-form-card">
             <div className="login-header">
-              <h3>Login</h3>
-              <p>Access the district school monitoring portal</p>
+              <p className="form-kicker">Secure sign in</p>
+              <h3>Welcome Back</h3>
+              <p>Access Ramanathapuram District School Monitoring Portal</p>
             </div>
 
             <form onSubmit={handleLogin} className="login-form">
@@ -529,8 +598,17 @@ function App() {
               </button>
             </form>
 
+            <button
+              type="button"
+              className="forgot-link"
+              onClick={() => setLoginError('Please contact the district portal administrator to reset your password.')}
+            >
+              Forgot Password?
+            </button>
+
             <div className="demo-box">
-              <p>Demo access</p>
+              <p>Demo Access</p>
+              <span>Use the configured demo credentials for local review.</span>
               <span>Username: {demoUsername}</span>
               <span>Password: {demoPassword}</span>
             </div>
@@ -657,6 +735,27 @@ function App() {
               </div>
             </div>
 
+            <div className="map-card">
+              <div className="chart-header map-card-header">
+                <div>
+                  <p className="eyebrow">Location intelligence</p>
+                  <h3>Ramanathapuram District – School Locations</h3>
+                </div>
+                <span className="location-count">{schools.filter((school) => Number.isFinite(school.latitude) && Number.isFinite(school.longitude)).length} mapped / {schools.length} schools</span>
+              </div>
+              <SchoolMap
+                schools={schools}
+                onSelectSchool={(school) => {
+                  setSelectedSchoolId(school.id)
+                  setActiveView('profile')
+                }}
+              />
+              <div className="map-status-row">
+                <span>Location Not Available: {schools.filter((school) => !Number.isFinite(school.latitude) || !Number.isFinite(school.longitude)).length}</span>
+                <button type="button" className="text-link" onClick={() => setActiveView('directory')}>Update from School Profile</button>
+              </div>
+            </div>
+
             <div className="table-card">
               <div className="chart-header">
                 <h3>Attention Required</h3>
@@ -776,7 +875,23 @@ function App() {
                 <p className="eyebrow">School Profile</p>
                 <h2>{selectedSchool.schoolName}</h2>
               </div>
+              <button type="button" className="secondary-button" onClick={() => setIsEditingProfile((current) => !current)}>
+                {isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}
+              </button>
             </div>
+
+            {isEditingProfile && (
+              <form className="edit-profile-form" onSubmit={updateSelectedSchool}>
+                <label><span>School Name</span><input name="schoolName" defaultValue={selectedSchool.schoolName} required /></label>
+                <label><span>Headmaster</span><input name="headmaster" defaultValue={selectedSchool.headmaster} /></label>
+                <label><span>Phone</span><input name="phone" defaultValue={selectedSchool.phone ?? ''} /></label>
+                <label><span>Email</span><input name="email" type="email" defaultValue={selectedSchool.email ?? ''} /></label>
+                <label><span>Latitude</span><input name="latitude" type="number" step="any" defaultValue={selectedSchool.latitude ?? ''} /></label>
+                <label><span>Longitude</span><input name="longitude" type="number" step="any" defaultValue={selectedSchool.longitude ?? ''} /></label>
+                <label className="edit-wide"><span>Address</span><input name="address" defaultValue={selectedSchool.address} /></label>
+                <button type="submit" className="primary-button edit-wide">Save Profile</button>
+              </form>
+            )}
 
             <div className="profile-grid">
               <div className="detail-panel">
@@ -792,6 +907,7 @@ function App() {
                   <div><span>Block</span><strong>{selectedSchool.block}</strong></div>
                   <div><span>Taluk</span><strong>{selectedSchool.taluk}</strong></div>
                   <div><span>PIN Code</span><strong>{selectedSchool.pinCode || 'Data Not Available'}</strong></div>
+                  <div><span>Location</span><strong>{selectedSchool.latitude !== undefined && selectedSchool.longitude !== undefined ? `${selectedSchool.latitude}, ${selectedSchool.longitude}` : 'Location Not Available'}</strong></div>
                 </div>
               </div>
 
@@ -803,6 +919,8 @@ function App() {
                   <div><span>Non-Teaching Staff</span><strong>{selectedSchool.nonTeachingStaff}</strong></div>
                   <div><span>School Photo</span><strong>{selectedSchool.photo || 'Data Not Available'}</strong></div>
                   <div><span>Remarks</span><strong>{selectedSchool.remarks || 'Data Not Available'}</strong></div>
+                  <div><span>Phone</span><strong>{selectedSchool.phone || 'Data Not Available'}</strong></div>
+                  <div><span>Email</span><strong>{selectedSchool.email || 'Data Not Available'}</strong></div>
                   <div><span>Last Updated</span><strong>{selectedSchool.lastUpdated}</strong></div>
                 </div>
               </div>
@@ -999,9 +1117,12 @@ function App() {
 
             <div className="summary-grid quality-grid">
               <div className="summary-card"><span>Total Records</span><strong>{dataQualitySummary.totalRecords}</strong></div>
-              <div className="summary-card"><span>Valid Records</span><strong>{dataQualitySummary.validRecords}</strong></div>
-              <div className="summary-card"><span>Records with Warnings</span><strong>{dataQualitySummary.warnings}</strong></div>
-              <div className="summary-card"><span>Records with Errors</span><strong>{dataQualitySummary.errors}</strong></div>
+              <div className="summary-card"><span>Complete Records</span><strong>{dataQualitySummary.validRecordsRate}%</strong></div>
+              <div className="summary-card"><span>Missing Headmaster</span><strong>{schools.filter((school) => !school.headmaster).length}</strong></div>
+              <div className="summary-card"><span>Missing Student Data</span><strong>{schools.filter((school) => !school.totalStudents).length}</strong></div>
+              <div className="summary-card"><span>Missing Teacher Data</span><strong>{schools.filter((school) => !school.totalTeachers).length}</strong></div>
+              <div className="summary-card"><span>Missing GPS Location</span><strong>{schools.filter((school) => school.latitude === undefined || school.longitude === undefined).length}</strong></div>
+              <div className="summary-card"><span>Missing Contact Details</span><strong>{schools.filter((school) => !school.phone && !school.email).length}</strong></div>
             </div>
 
             <div className="table-card">
@@ -1038,6 +1159,9 @@ function App() {
                 <p className="eyebrow">Reports</p>
                 <h2>Printable District Summary</h2>
               </div>
+              <button type="button" className="secondary-button" onClick={() => exportSchools(schools, 'ramanathapuram-school-report.xlsx')}>
+                <Download size={16} /> Export Excel
+              </button>
             </div>
 
             <div className="report-grid">
@@ -1064,6 +1188,14 @@ function App() {
                   {facilityGapData.slice(0, 6).map((facility) => (
                     <li key={facility.name}>{facility.name}: {facility.percentage}%</li>
                   ))}
+                </ul>
+              </div>
+              <div className="report-card">
+                <h3>Data Quality Report</h3>
+                <ul>
+                  <li>Missing GPS: {schools.filter((school) => school.latitude === undefined || school.longitude === undefined).length}</li>
+                  <li>Missing Headmaster: {schools.filter((school) => !school.headmaster).length}</li>
+                  <li>Missing Contact: {schools.filter((school) => !school.phone && !school.email).length}</li>
                 </ul>
               </div>
             </div>
@@ -1099,6 +1231,7 @@ function App() {
                     <th>Taluk</th>
                     <th>Blocks</th>
                     <th>Schools</th>
+                    <th>Gov / Aided / Private</th>
                     <th>Students</th>
                     <th>Teachers</th>
                   </tr>
@@ -1108,10 +1241,11 @@ function App() {
                     const talukSchools = schools.filter((school) => school.taluk === taluk.name)
                     const blocks = [...new Set(talukSchools.map((school) => school.block))]
                     return (
-                      <tr key={taluk.name}>
-                        <td>{taluk.name}</td>
+                      <tr key={taluk.name} onClick={() => { setTalukFilter(taluk.name); setActiveView('directory') }} className="clickable-row">
+                        <td><button type="button" className="text-link">{taluk.name}</button></td>
                         <td>{blocks.join(', ') || 'Data Not Available'}</td>
                         <td>{taluk.value}</td>
+                        <td>{talukSchools.filter((school) => school.management === 'Government').length} / {talukSchools.filter((school) => school.management === 'Government Aided').length} / {talukSchools.filter((school) => school.management === 'Private').length}</td>
                         <td>{talukSchools.reduce((sum, school) => sum + school.totalStudents, 0)}</td>
                         <td>{talukSchools.reduce((sum, school) => sum + school.totalTeachers, 0)}</td>
                       </tr>
@@ -1133,6 +1267,15 @@ function App() {
             </div>
 
             <div className="table-card">
+              <div className="filter-panel compact-filter">
+                <select value={villageViewTaluk} onChange={(event) => setVillageViewTaluk(event.target.value)}>
+                  {distinctTaluks.map((item) => <option key={item} value={item}>{item === 'All' ? 'All Taluks' : item}</option>)}
+                </select>
+                <select value={villageFilter} onChange={(event) => setVillageFilter(event.target.value)}>
+                  <option value="All">All Villages</option>
+                  {distinctVillages.filter((item) => item !== 'All').map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </div>
               <table>
                 <thead>
                   <tr>
@@ -1153,7 +1296,7 @@ function App() {
                       acc[key] = current
                       return acc
                     }, {}),
-                  ).map(([village, data]) => (
+                  ).filter(([village, data]) => (villageViewTaluk === 'All' || data.taluk === villageViewTaluk) && (villageFilter === 'All' || village === villageFilter)).map(([village, data]) => (
                     <tr key={village}>
                       <td>{village}</td>
                       <td>{data.block}</td>
@@ -1213,6 +1356,9 @@ function App() {
               <div className="summary-card"><span>Government Schools</span><strong>{schoolStats.governmentSchools}</strong></div>
               <div className="summary-card"><span>Infrastructure Gaps</span><strong>{attentionRequired.length}</strong></div>
               <div className="summary-card"><span>Data Pending Schools</span><strong>{schools.filter((school) => school.status === 'Data Pending').length}</strong></div>
+              <div className="summary-card"><span>Highest School Taluk</span><strong>{schoolsByTaluk[0]?.name || 'No Data'}</strong></div>
+              <div className="summary-card"><span>Lowest School Taluk</span><strong>{schoolsByTaluk[schoolsByTaluk.length - 1]?.name || 'No Data'}</strong></div>
+              <div className="summary-card"><span>Schools without GPS</span><strong>{schools.filter((school) => school.latitude === undefined || school.longitude === undefined).length}</strong></div>
             </div>
           </section>
         )}
@@ -1238,6 +1384,10 @@ function buildAutoMappings(rows: Record<string, string | number | boolean | null
     headmaster: options.find((header) => ['headmaster', 'headteacher', 'principal'].includes(normalizedLookup(header))) ?? 'headmaster',
     address: options.find((header) => ['address', 'location'].includes(normalizedLookup(header))) ?? 'address',
     pinCode: options.find((header) => ['pincode', 'pin', 'postalcode'].includes(normalizedLookup(header))) ?? 'pinCode',
+  latitude: options.find((header) => ['latitude', 'lat'].includes(normalizedLookup(header))) ?? 'latitude',
+  longitude: options.find((header) => ['longitude', 'lng', 'lon'].includes(normalizedLookup(header))) ?? 'longitude',
+  phone: options.find((header) => ['phone', 'phonenumber', 'mobile'].includes(normalizedLookup(header))) ?? 'phone',
+  email: options.find((header) => ['email', 'emailaddress'].includes(normalizedLookup(header))) ?? 'email',
     establishedYear: options.find((header) => ['establishedyear', 'yearofestablishment'].includes(normalizedLookup(header))) ?? 'establishedYear',
     boys: options.find((header) => ['boys', 'malestudents'].includes(normalizedLookup(header))) ?? 'boys',
     girls: options.find((header) => ['girls', 'femalestudents'].includes(normalizedLookup(header))) ?? 'girls',
@@ -1270,3 +1420,9 @@ function buildAutoMappings(rows: Record<string, string | number | boolean | null
 }
 
 export default App
+
+function parseOptionalNumber(value: unknown) {
+  if (value === null || value === undefined || String(value).trim() === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}

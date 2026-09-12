@@ -11,6 +11,10 @@ export type SchoolRecord = {
   headmaster: string
   address: string
   pinCode: string
+  latitude?: number
+  longitude?: number
+  phone?: string
+  email?: string
   totalStudents: number
   boys: number
   girls: number
