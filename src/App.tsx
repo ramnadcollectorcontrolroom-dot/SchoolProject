@@ -45,7 +45,7 @@ const DEFAULT_PAGE: ViewName = 'dashboard'
 
 const demoUsername = import.meta.env.VITE_DEMO_USERNAME || 'admin'
 const demoPassword = import.meta.env.VITE_DEMO_PASSWORD || 'admin123'
-const approvedPortraitUrl = import.meta.env.VITE_APPROVED_CM_IMAGE || ''
+const approvedPortraitUrl = import.meta.env.VITE_APPROVED_CM_IMAGE || '/cm-vijay.jpg'
 
 const navigation = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
@@ -97,6 +97,7 @@ function App() {
   })
   const [loginForm, setLoginForm] = useState<LoginFormState>(defaultLoginForm)
   const [isPasswordVisible, setIsPasswordVisible] = useState(false)
+  const [portraitFailed, setPortraitFailed] = useState(false)
   const [loginError, setLoginError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedSchoolId, setSelectedSchoolId] = useState<number>(sampleSchools[0]?.id ?? 0)
@@ -527,8 +528,12 @@ function App() {
             </div>
 
             <div className="branding-portrait" aria-label={approvedPortraitUrl ? 'Approved government portrait' : 'Approved government portrait placeholder'}>
-              {approvedPortraitUrl ? (
-                <img src={approvedPortraitUrl} alt="Approved government portrait" />
+              {approvedPortraitUrl && !portraitFailed ? (
+                <img
+                  src={approvedPortraitUrl}
+                  alt="Approved government portrait"
+                  onError={() => setPortraitFailed(true)}
+                />
               ) : (
                 <div className="portrait-placeholder">
                   <ShieldCheck size={24} />
