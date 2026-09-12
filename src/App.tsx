@@ -197,6 +197,11 @@ function App() {
     return entries.sort((a, b) => b.value - a.value)
   }, [schools])
 
+  const locatedSchools = useMemo(
+    () => schools.filter((school) => Number.isFinite(school.latitude) && Number.isFinite(school.longitude)),
+    [schools],
+  )
+
   const managementChart = useMemo(() => {
     const entries = ['Government', 'Government Aided', 'Private'].map((name) => ({
       name,
@@ -509,18 +514,18 @@ function App() {
   if (!isLoggedIn) {
     return (
       <div className="login-page-shell">
-        <div className="login-panel">
+        <div className="login-panel login-portal-shell">
           <div className="login-branding">
             <div className="branding-topline">
               <div className="brand-mark">TN</div>
               <div>
-                <p className="eyebrow">Government of Tamil Nadu</p>
-                <span className="portal-label">District School Education</span>
+                <p className="eyebrow">தமிழ்நாடு அரசு</p>
+                <span className="portal-label">ராமநாதபுரம் மாவட்டம்</span>
               </div>
             </div>
 
             <div className="branding-copy">
-              <p className="branding-kicker">Official monitoring portal</p>
+              <p className="branding-kicker">Official education portal</p>
               <h1>Ramanathapuram District</h1>
               <h2>School Information Portal</h2>
               <p className="tagline">Digital School Information &amp; Monitoring System</p>
@@ -542,6 +547,8 @@ function App() {
                 </div>
               )}
             </div>
+
+            <p className="tamil-quote">“ஒவ்வொரு குழந்தைக்கும்<br />கல்வி உரிமை”</p>
 
             <div className="feature-list">
               <div className="feature-item"><Database size={17} /><span>School Data Management</span></div>
@@ -618,6 +625,73 @@ function App() {
               <span>Password: {demoPassword}</span>
             </div>
           </div>
+
+          <section className="portal-preview" aria-label="School Information Portal preview">
+            <div className="preview-topbar">
+              <div className="preview-brand">
+                <div className="preview-emblem">TN</div>
+                <div>
+                  <strong>Ramanathapuram District</strong>
+                  <span>School Information Portal</span>
+                </div>
+              </div>
+              <div className="preview-user"><User size={14} /> District Admin</div>
+            </div>
+
+            <div className="preview-body">
+              <aside className="preview-nav">
+                <p>PORTAL MENU</p>
+                <span className="active"><Home size={14} /> Dashboard</span>
+                <span><School size={14} /> Schools</span>
+                <span><MapPinned size={14} /> Taluk View</span>
+                <span><Building2 size={14} /> Village View</span>
+                <span><FileText size={14} /> Reports</span>
+                <span><Upload size={14} /> Data Import</span>
+              </aside>
+
+              <div className="preview-content">
+                <div className="preview-heading">
+                  <div><small>District Overview</small><h3>School Performance Dashboard</h3></div>
+                  <span className="preview-status"><i /> Live data</span>
+                </div>
+
+                <div className="preview-stat-grid">
+                  <div><span>Total Schools</span><strong>{schoolStats.totalSchools}</strong></div>
+                  <div><span>Total Students</span><strong>{moneyFormat(schoolStats.totalStudents)}</strong></div>
+                  <div><span>Total Teachers</span><strong>{schoolStats.totalTeachers}</strong></div>
+                  <div><span>Government</span><strong>{schoolStats.governmentSchools}</strong></div>
+                  <div><span>Private</span><strong>{schoolStats.privateSchools}</strong></div>
+                </div>
+
+                <div className="preview-main-grid">
+                  <div className="preview-map-card">
+                    <div className="preview-card-title"><strong>Ramanathapuram District – School Locations</strong><span>{locatedSchools.length} mapped</span></div>
+                    <div className="preview-map">
+                      <div className="map-coastline" />
+                      {locatedSchools.map((school) => {
+                        const left = Math.min(92, Math.max(8, ((school.longitude ?? 78.8) - 78.35) * 100))
+                        const top = Math.min(88, Math.max(10, (10.05 - (school.latitude ?? 9.35)) * 100))
+                        return <span key={school.id} className="preview-marker" style={{ left: `${left}%`, top: `${top}%` }} title={school.schoolName} />
+                      })}
+                      {!locatedSchools.length && <span className="preview-map-empty">Location data pending</span>}
+                    </div>
+                    <div className="preview-map-footer"><span><i className="green-dot" /> Normal</span><span><i className="orange-dot" /> Attention</span><em>{schools.length - locatedSchools.length} without GPS</em></div>
+                  </div>
+
+                  <div className="preview-taluk-card">
+                    <div className="preview-card-title"><strong>Schools by Taluk</strong><span>Count</span></div>
+                    {schoolsByTaluk.slice(0, 4).map((taluk) => <div className="taluk-bar" key={taluk.name}><span>{taluk.name}</span><div><i style={{ width: `${schoolStats.totalSchools ? (taluk.value / schoolStats.totalSchools) * 100 : 0}%` }} /></div><b>{taluk.value}</b></div>)}
+                  </div>
+                </div>
+
+                <div className="preview-footer-cards">
+                  <div><small>Recent schools</small><strong>{schools[0]?.schoolName || 'No Data'}</strong></div>
+                  <div><small>Quick action</small><strong>Import school data <Upload size={13} /></strong></div>
+                  <div><small>Review status</small><strong className="review-good"><i /> {schools.filter((school) => school.status === 'Active').length} active records</strong></div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     )
